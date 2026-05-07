@@ -184,6 +184,26 @@ def regress(goal_set: State, action: Action) -> State | None:
          Check relevance first, then check for contradictions, then compute.
     """
     ### Your code here ###
+    # En la notación de la diapositiva:
+    #   Pos(g) = goal_set
+    #   Neg(g) = ∅  (este proyecto modela metas como fluentes positivos)
+    #
+    # Relevancia: ADD(a) debe unificarse con al menos un literal positivo del objetivo.
+    if not (action.add_list & goal_set):
+        return None
+
+    # Consistencia: la acción no puede negar (borrar) un literal que debe quedar verdadero.
+    if action.del_list & goal_set:
+        return None
+
+    # Además, si algo debe ser verdadero antes de la acción (porque NO lo logra ADD),
+    # no puede estar en precondiciones negativas de la acción.
+    needed_before = goal_set - action.add_list
+    if action.precond_neg & needed_before:
+        return None
+
+    # REGRESS(Pos(g), a) = (Pos(g) - ADD(a)) ∪ Pos(Precond(a))
+    return (goal_set - action.add_list) | action.precond_pos
 
     ### End of your code ###
 
@@ -207,6 +227,107 @@ def backwardSearch(problem: Problem) -> list[Action]:
          Pickable) that are false in the initial state — these are dead ends.
     """
     ### Your code here ###
+    start_state = problem.initial_state
+    goal = problem.goal
+
+    if goal.issubset(start_state):
+        return []
+
+    all_actions = get_all_groundings(problem.domain, problem.objects)
+    actions_by_add: dict[tuple, list[Action]] = {}
+    for action in all_actions:
+        for f in action.add_list:
+            actions_by_add.setdefault(f, []).append(action)
+
+    def is_inconsistent(subgoal: State) -> bool:
+        """
+        Poda mínima: descartar metas imposibles por inconsistencias lógicas
+        (sin requerir heurísticas ni conocimiento avanzado del dominio).
+        """
+        # Un mismo ente no puede estar en dos celdas a la vez.
+        at_locs: dict[object, set[object]] = {}
+        for f in subgoal:
+            if f and f[0] == "At":
+                _pred, ent, loc = f
+                at_locs.setdefault(ent, set()).add(loc)
+        if any(len(locs) > 1 for locs in at_locs.values()):
+            return True
+
+        robot = "robot"
+
+        # El robot no puede estar HandsFree y Holding algo simultáneamente.
+        if ("HandsFree", robot) in subgoal:
+            for f in subgoal:
+                if f and f[0] == "Holding" and len(f) >= 3 and f[1] == robot:
+                    return True
+
+        # El robot no puede sostener dos objetos distintos a la vez.
+        held = {f[2] for f in subgoal if f and f[0] == "Holding" and f[1] == robot}
+        if len(held) > 1:
+            return True
+
+        # Un paciente no puede estar rescatado y a la vez "At" en alguna celda.
+        rescued = {f[1] for f in subgoal if f and f[0] == "Rescued"}
+        if rescued:
+            for f in subgoal:
+                if f and f[0] == "At" and f[1] in rescued:
+                    return True
+
+        return False
+
+    def has_static_contradiction(subgoal: State) -> bool:
+        # Estos predicados no cambian nunca; si son requeridos pero no están en el
+        # estado inicial, ese subobjetivo es imposible.
+        static_preds = {"MedicalPost", "Adjacent", "Pickable"}
+        for f in subgoal:
+            if f and f[0] in static_preds and f not in start_state:
+                return True
+        return False
+
+    def canonicalize(subgoal: State) -> State:
+        # No queremos que el "estado objetivo" cargue cosas estáticas ni Free(c),
+        # porque eso infla el espacio de búsqueda sin aportar.
+        drop_preds = {"MedicalPost", "Adjacent", "Pickable", "Free"}
+        return frozenset(f for f in subgoal if f and f[0] not in drop_preds)
+
+    goal = canonicalize(goal)
+
+    frontier: Queue = Queue()
+    frontier.push((goal, []))  # (subgoal, actions_in_reverse_order)
+    visited: set[State] = {goal}
+
+    while not frontier.isEmpty():
+        subgoal, actions_rev = frontier.pop()
+
+        if subgoal.issubset(start_state):
+            return list(reversed(actions_rev))
+
+        # Acciones relevantes: las que logran algo que AÚN no está satisfecho
+        # por el estado inicial (evita branching inútil).
+        unsatisfied = subgoal - start_state
+        if not unsatisfied:
+            return list(reversed(actions_rev))
+
+        candidate_actions: set[Action] = set()
+        for f in unsatisfied:
+            candidate_actions.update(actions_by_add.get(f, []))
+
+        for action in candidate_actions:
+            new_subgoal = regress(subgoal, action)
+            if new_subgoal is None:
+                continue
+            if has_static_contradiction(new_subgoal):
+                continue
+            new_subgoal = canonicalize(new_subgoal)
+            if is_inconsistent(new_subgoal):
+                continue
+            if new_subgoal in visited:
+                continue
+
+            visited.add(new_subgoal)
+            frontier.push((new_subgoal, actions_rev + [action]))
+
+    return []
 
     ### End of your code ###
 
