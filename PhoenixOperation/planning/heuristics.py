@@ -44,9 +44,33 @@ def ignorePreconditionsHeuristic(
          with the initial state, or generate all groundings regardless of state).
          Remember: with no preconditions, every grounding is "applicable".
     """
-    ### Your code here ###
+    from planning.pddl import get_all_groundings
+    unsatisfied = goal - state
+    if not unsatisfied:
+        return 0.0
 
-    ### End of your code ###
+    all_actions = get_all_groundings(domain, objects)
+    cost = 0.0
+
+    while unsatisfied:
+        best_action = None
+        max_covered = 0
+        best_covered_set = frozenset()
+
+        for action in all_actions:
+            covered = action.add_list & unsatisfied
+            if len(covered) > max_covered:
+                max_covered = len(covered)
+                best_action = action
+                best_covered_set = covered
+
+        if max_covered == 0:
+            return float('inf')
+
+        unsatisfied = unsatisfied - best_covered_set
+        cost += 1.0
+
+    return cost
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +102,34 @@ def ignoreDeleteListsHeuristic(
          Use get_applicable_actions to enumerate applicable grounded actions at
          each step (preconditions still apply in the relaxed model).
     """
-    ### Your code here ###
+    from planning.pddl import get_applicable_actions
+    current_state = state
+    unsatisfied = goal - current_state
+    if not unsatisfied:
+        return 0.0
 
-    ### End of your code ###
+    cost = 0.0
+    while unsatisfied:
+        applicable_actions = get_applicable_actions(current_state, domain, objects)
+        best_action = None
+        best_score = (-1, -1)
+
+        for action in applicable_actions:
+            covered_goal = len(action.add_list & unsatisfied)
+            new_fluents = len(action.add_list - current_state)
+            if new_fluents == 0:
+                continue
+
+            score = (covered_goal, new_fluents)
+            if score > best_score:
+                best_score = score
+                best_action = action
+
+        if best_action is None:
+            return float('inf')
+
+        current_state = current_state | best_action.add_list
+        unsatisfied = goal - current_state
+        cost += 1.0
+
+    return cost

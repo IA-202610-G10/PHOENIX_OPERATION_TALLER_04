@@ -356,9 +356,35 @@ def aStarPlanner(
          Use PriorityQueue with priority = g + h(next_state).
          Track the best g-cost seen for each state to avoid stale expansions.
     """
-    ### Your code here ###
+    from planning.utils import PriorityQueue
+    start_state = problem.getStartState()
+    if problem.isGoalState(start_state):
+        return []
 
-    ### End of your code ###
+    frontier = PriorityQueue()
+    h_start = heuristic(start_state, problem.goal, problem.domain, problem.objects)
+    frontier.push((start_state, [], 0.0), 0.0 + h_start)
+
+    best_g: dict[State, float] = {start_state: 0.0}
+
+    while not frontier.isEmpty():
+        state, plan, g = frontier.pop()
+
+        if problem.isGoalState(state):
+            return plan
+
+        if g > best_g.get(state, float('inf')):
+            continue
+
+        for next_state, action, cost in problem.getSuccessors(state):
+            new_g = g + cost
+            if new_g < best_g.get(next_state, float('inf')):
+                best_g[next_state] = new_g
+                h = heuristic(next_state, problem.goal, problem.domain, problem.objects)
+                f = new_g + h
+                frontier.push((next_state, plan + [action], new_g), f)
+
+    return []
 
 
 # Aliases used by the command-line argument parser
