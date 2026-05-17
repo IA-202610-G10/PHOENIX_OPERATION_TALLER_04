@@ -44,32 +44,87 @@ def ignorePreconditionsHeuristic(
          with the initial state, or generate all groundings regardless of state).
          Remember: with no preconditions, every grounding is "applicable".
     """
+    #Version Original
+    
+    #from planning.pddl import get_all_groundings
+    #unsatisfied = goal - state
+    #if not unsatisfied:
+        #return 0.0
+
+    #all_actions = get_all_groundings(domain, objects)
+    #cost = 0.0
+
+    #while unsatisfied:
+        #best_action = None
+        #max_covered = 0
+        #best_covered_set = frozenset()
+
+        #for action in all_actions:
+            #covered = action.add_list & unsatisfied
+            #if len(covered) > max_covered:
+               # max_covered = len(covered)
+               # best_action = action
+                #best_covered_set = covered
+
+        #if max_covered == 0:
+            #return float('inf')
+
+        #unsatisfied = unsatisfied - best_covered_set
+        #cost += 1.0
+
+    #return cost
+    
+    ##Version final
+    #Prompt: Segun lo que se pide en el enunciado y su funcionalidad, como optimizarias este codigo?
+
     from planning.pddl import get_all_groundings
     unsatisfied = goal - state
+
     if not unsatisfied:
         return 0.0
 
-    all_actions = get_all_groundings(domain, objects)
+    cache_key = "_cached_groundings"
+
+    if not hasattr(ignorePreconditionsHeuristic, cache_key):
+
+        setattr(
+            ignorePreconditionsHeuristic,
+            cache_key,
+            get_all_groundings(domain, objects)
+        )
+
+    all_actions = getattr(
+        ignorePreconditionsHeuristic,
+        cache_key
+    )
+
+    useful_actions = []
+
+    for action in all_actions:
+        relevant = action.add_list & goal
+        if relevant:
+            useful_actions.append(
+                (action, relevant)
+            )
+
     cost = 0.0
 
     while unsatisfied:
-        best_action = None
-        max_covered = 0
-        best_covered_set = frozenset()
 
-        for action in all_actions:
-            covered = action.add_list & unsatisfied
-            if len(covered) > max_covered:
-                max_covered = len(covered)
-                best_action = action
+        best_covered_set = frozenset()
+        max_covered = 0
+
+        for _, relevant_adds in useful_actions:
+            covered = relevant_adds & unsatisfied
+            covered_count = len(covered)
+            if covered_count > max_covered:
+                max_covered = covered_count
                 best_covered_set = covered
 
         if max_covered == 0:
-            return float('inf')
-
-        unsatisfied = unsatisfied - best_covered_set
+            return float("inf")
+        unsatisfied -= best_covered_set
         cost += 1.0
-
     return cost
 
 

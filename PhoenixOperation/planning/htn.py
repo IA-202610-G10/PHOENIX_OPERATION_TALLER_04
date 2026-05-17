@@ -64,27 +64,92 @@ def hierarchicalSearch(problem: Problem, hlas: list[HLA]) -> list[Action]:
          To simulate execution, apply each action in order using apply_action().
     """
     ### Your code here ###
+    #Version original
+    #if not hlas:
+       # return []
 
+    #frontier = Queue()
+
+    #for hla in hlas:
+        #frontier.push([hla])
+
+    #visited = set()
+
+    #while not frontier.isEmpty():
+
+        #plan = frontier.pop()
+
+        #signature = tuple(step.name for step in plan)
+
+        #if signature in visited:
+            #continue
+
+        #visited.add(signature)
+
+        #if is_plan_primitive(plan):
+
+            #state = problem.initial_state
+           # valid = True
+
+            #for action in plan:
+
+                #if not is_applicable(state, action):
+                   # valid = False
+                    #break
+
+                #state = apply_action(state, action)
+
+            #if valid and problem.isGoalState(state):
+               # return plan
+
+            #continue
+
+        #first_hla_index = None
+
+        #for i, step in enumerate(plan):
+
+            #if not is_primitive(step):
+               # first_hla_index = i
+                #break
+
+        #if first_hla_index is None:
+            #continue
+
+       # hla = plan[first_hla_index]
+
+        #for refinement in hla.refinements:
+
+           # new_plan = (
+               # plan[:first_hla_index]
+                #+ refinement
+                #+ plan[first_hla_index + 1:]
+            #)
+
+           # frontier.push(new_plan)
+
+    #return []
+    
+    #Version final
+    #Prompt: Segun lo pedido en el taller, como optimizarias este codigo?
     if not hlas:
         return []
-
     frontier = Queue()
-
     for hla in hlas:
         frontier.push([hla])
-
     visited = set()
+
+    MAX_PLAN_SIZE = 200
 
     while not frontier.isEmpty():
 
         plan = frontier.pop()
-
         signature = tuple(step.name for step in plan)
-
         if signature in visited:
             continue
-
         visited.add(signature)
+
+        if len(plan) > MAX_PLAN_SIZE:
+            continue
 
         if is_plan_primitive(plan):
 
@@ -116,18 +181,40 @@ def hierarchicalSearch(problem: Problem, hlas: list[HLA]) -> list[Action]:
             continue
 
         hla = plan[first_hla_index]
+        sorted_refinements = sorted(
+            hla.refinements,
+            key=len
+        )
 
-        for refinement in hla.refinements:
+        for refinement in sorted_refinements:
 
             new_plan = (
                 plan[:first_hla_index]
                 + refinement
                 + plan[first_hla_index + 1:]
             )
+            partial_state = problem.initial_state
+            valid_prefix = True
 
-            frontier.push(new_plan)
+            for step in new_plan:
+
+                if not is_primitive(step):
+                    break
+
+                if not is_applicable(partial_state, step):
+                    valid_prefix = False
+                    break
+
+                partial_state = apply_action(
+                    partial_state,
+                    step
+                )
+
+            if valid_prefix:
+                frontier.push(new_plan)
 
     return []
+    
 
     ### End of your code ###
 
